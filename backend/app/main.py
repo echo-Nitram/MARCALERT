@@ -8,14 +8,10 @@ from app.api.marcas import router as marcas_router
 from app.api.alertas import router as alertas_router
 from app.api.boletines import router as boletines_router
 from app.api.billing import router as billing_router
-from app.database import Base, engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Crear tablas si no existen (en producción usar Alembic)
-    Base.metadata.create_all(bind=engine)
-
     # Iniciar scheduler
     from app.services.ingest.scheduler import create_scheduler
     scheduler = create_scheduler()
