@@ -25,15 +25,18 @@ oposición ya calculado.
 
 | Capa | Tecnología |
 |------|-----------|
+| Frontend | React 18 + Vite + TypeScript + Tailwind CSS |
 | Backend | Python 3.11 + FastAPI |
 | Base de datos | PostgreSQL 16 (multi-tenant por `tenant_id`) |
+| Migraciones | Alembic |
 | Parser de PDF | `pdfplumber` (texto seleccionable — sin OCR) |
 | Motor fonético | Determinístico propio (seseo, yeísmo, betacismo) + `rapidfuzz` |
 | IA | Claude API (Anthropic) — explicaciones, visión, borradores |
 | Email | Resend |
 | Pagos | Stripe (suscripciones) |
 | Scheduler | APScheduler + calendario hábil UY |
-| Contenedores | Docker + docker-compose |
+| Deploy | Vercel (frontend) + Railway (backend + PostgreSQL) |
+| CI | GitHub Actions (tests Python + build Node) |
 
 ---
 
@@ -114,7 +117,7 @@ Trial gratuito de 30 días. Sin tarjeta al registrarse.
 MARCALERT/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                    # FastAPI app + lifespan (scheduler)
+│   │   ├── main.py                    # FastAPI app + lifespan (scheduler) + CORS
 │   │   ├── config.py                  # Settings (env vars)
 │   │   ├── database.py                # SQLAlchemy (lazy engine)
 │   │   ├── models/
@@ -150,15 +153,41 @@ MARCALERT/
 │   │           ├── explain.py         # Capa B: Claude Haiku (explicación)
 │   │           ├── vision.py          # Capa C: Claude Vision (logos)
 │   │           └── draft.py           # Premium: borrador de oposición
+│   ├── migrations/
+│   │   ├── env.py                     # Alembic env (lee DATABASE_URL)
+│   │   └── versions/
+│   │       └── 0001_initial_schema.py # Schema completo: 7 tablas + 4 ENUMs
 │   ├── tests/
 │   │   ├── test_phonetic.py           # Motor fonético rioplatense (11 tests)
 │   │   ├── test_niza.py               # Afinidad de clases Niza (7 tests)
 │   │   ├── test_calendar.py           # Calendario hábil UY (9 tests)
 │   │   ├── test_parser.py             # Parser INID con datos reales (13 tests)
 │   │   └── test_billing.py            # Stripe tier mapping (6 tests)
+│   ├── alembic.ini
 │   ├── Dockerfile
+│   ├── Procfile                       # Railway: uvicorn $PORT
 │   ├── requirements.txt
 │   └── pytest.ini
+├── frontend/
+│   ├── src/
+│   │   ├── lib/api.ts                 # Axios (VITE_API_URL)
+│   │   ├── pages/
+│   │   │   ├── Register.tsx           # Registro de agente
+│   │   │   ├── Login.tsx              # Login
+│   │   │   ├── Marcas.tsx             # Cartera de marcas
+│   │   │   ├── Alertas.tsx            # Dashboard de colisiones
+│   │   │   ├── Boletines.tsx          # Historial de boletines
+│   │   │   └── Billing.tsx            # Planes y facturación
+│   │   └── components/
+│   │       ├── Layout.tsx
+│   │       ├── EstadoBadge.tsx
+│   │       ├── ScoreBadge.tsx
+│   │       └── Spinner.tsx
+│   ├── vercel.json                    # SPA rewrite
+│   └── package.json
+├── .github/
+│   └── workflows/
+│       └── ci.yml                     # Backend tests + Frontend build
 ├── docker-compose.yml
 ├── CLAUDE.md
 └── README.md
@@ -173,6 +202,8 @@ MARCALERT/
 ```bash
 cp .env.example .env       # completar las variables
 docker compose up -d db    # levantar PostgreSQL
+cd backend
+alembic -c alembic.ini upgrade head   # crear tablas
 docker compose up backend  # API en http://localhost:8000
 ```
 
@@ -182,16 +213,25 @@ docker compose up backend  # API en http://localhost:8000
 cd backend
 pip install -r requirements.txt
 # Crear DB PostgreSQL y configurar DATABASE_URL en .env
+alembic -c alembic.ini upgrade head   # crear tablas
 uvicorn app.main:app --reload
 ```
 
-La API crea las tablas automáticamente al arrancar (en producción usar Alembic).
+### Frontend
 
-### Variables de entorno requeridas
+```bash
+cd frontend
+npm install
+# Crear .env.local con VITE_API_URL=http://localhost:8000
+npm run dev   # http://localhost:5173
+```
+
+### Variables de entorno — Backend
 
 ```env
 DATABASE_URL=postgresql://marcalert:marcalert@localhost:5432/marcalert
 SECRET_KEY=<clave-aleatoria-larga>
+FRONTEND_URL=http://localhost:5173
 
 # Stripe (obtener en dashboard.stripe.com)
 STRIPE_SECRET_KEY=sk_live_...
@@ -207,10 +247,33 @@ ANTHROPIC_API_KEY=sk-ant-...
 RESEND_API_KEY=re_...
 EMAIL_FROM=alertas@marcalert.uy
 ADMIN_EMAIL=admin@marcalert.uy
-
-# URLs
-FRONTEND_URL=https://app.marcalert.uy
 ```
+
+### Variables de entorno — Frontend
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+---
+
+## Deploy (producción)
+
+### Backend → Railway
+
+1. Crear proyecto en [Railway](https://railway.app), agregar servicio **PostgreSQL** y servicio desde el repo apuntando a la carpeta `backend/`
+2. Configurar variables de entorno en el servicio backend (todas las de arriba, con URLs de producción)
+3. Railway detecta el `Procfile` y levanta uvicorn en el puerto asignado
+4. Correr migraciones una vez desde la consola de Railway:
+   ```bash
+   alembic -c alembic.ini upgrade head
+   ```
+
+### Frontend → Vercel
+
+1. Importar el repo en [Vercel](https://vercel.com), configurar **Root Directory** = `frontend`
+2. Agregar variable de entorno: `VITE_API_URL=https://<tu-proyecto>.up.railway.app`
+3. Vercel usa el `vercel.json` incluido para manejar el routing SPA
 
 ---
 
@@ -276,9 +339,10 @@ de la solicitud).
 | 5. Deadline hábil UY + feriados | ✅ |
 | 6. Alertas + email (Resend) + dashboard API | ✅ |
 | 7. Stripe + tiers + trial | ✅ |
-| 8. Frontend React/Vite (dashboard) | ⏳ |
-| 9. Alembic migrations | ⏳ |
-| 10. CI/CD (GitHub Actions) | ⏳ |
+| 8. Frontend React/Vite (dashboard) | ✅ |
+| 9. Alembic migrations | ✅ |
+| 10. CI/CD (GitHub Actions) | ✅ |
+| 11. Deploy Vercel + Railway | ✅ |
 
 ---
 
