@@ -7,6 +7,7 @@ from app.api.auth import router as auth_router
 from app.api.marcas import router as marcas_router
 from app.api.alertas import router as alertas_router
 from app.api.boletines import router as boletines_router
+from app.api.billing import router as billing_router
 from app.database import Base, engine
 
 
@@ -45,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(marcas_router)
 app.include_router(alertas_router)
 app.include_router(boletines_router)
+app.include_router(billing_router)
 
 
 @app.get("/health")
