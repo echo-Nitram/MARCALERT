@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # Stripe
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    # Price IDs de Stripe (reemplazar con IDs reales del dashboard)
+    stripe_price_starter: str = ""   # USD 29/mes — hasta 10 marcas
+    stripe_price_pro: str = ""       # USD 79/mes — hasta 50 marcas
+    stripe_price_estudio: str = ""   # USD 199/mes — ilimitadas + borradores
+
+    # URLs del frontend (para redirects de Stripe)
+    frontend_url: str = "http://localhost:5173"
 
     # DNPI / boletines
     dnpi_base_url: str = (
