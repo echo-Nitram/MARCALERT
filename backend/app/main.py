@@ -8,6 +8,7 @@ from app.api.marcas import router as marcas_router
 from app.api.alertas import router as alertas_router
 from app.api.boletines import router as boletines_router
 from app.api.billing import router as billing_router
+from app.config import get_settings
 
 
 @asynccontextmanager
@@ -23,6 +24,8 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
+settings = get_settings()
+
 app = FastAPI(
     title="MARCALERT",
     description="SaaS de vigilancia de marcas para Uruguay — DNPI/MIEM",
@@ -32,7 +35,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://app.marcalert.uy"],
+    allow_origins=[settings.frontend_url, "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
