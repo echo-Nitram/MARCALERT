@@ -23,11 +23,21 @@ logger = logging.getLogger(__name__)
 
 
 def _get_last_processed_numero(db: Session) -> int:
-    """Devuelve el número del último boletín procesado en la DB."""
+    """Devuelve el número del último boletín procesado en la DB.
+    En primer arranque, busca el último publicado en el índice DNPI."""
     from app.models.boletin import Boletin
+    from app.services.ingest.downloader import scrape_index_for_number
     result = db.query(Boletin.numero).filter(Boletin.procesado.is_(True)).order_by(Boletin.numero.desc()).first()
-    # Si no hay ninguno, empezar desde 348 (2026 empieza en 349 según spec)
-    return result[0] if result else 348
+    if result:
+        return result[0]
+    # Primera ejecución: descubrir el último boletín real desde el índice DNPI
+    ultimo = scrape_index_for_number(date.today().year)
+    if ultimo:
+        logger.info(f"Primer arranque: último boletín detectado en índice DNPI = {ultimo}")
+        return ultimo - 1  # run_ingestion intentará ultimo + 1 = ultimo
+    # Fallback conservador: un año atrás
+    logger.warning("No se pudo obtener el último boletín del índice DNPI, usando fallback")
+    return 348
 
 
 def check_new_boletin():

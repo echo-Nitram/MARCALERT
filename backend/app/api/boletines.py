@@ -52,17 +52,29 @@ def trigger_ingestion(
 
 
 def _run_ingest():
+    import logging
+    from datetime import date
     from app.database import SessionLocal
     from app.services.ingest.pipeline import run_ingestion
+    from app.services.ingest.downloader import scrape_index_for_number
     from app.models.boletin import Boletin
+    log = logging.getLogger(__name__)
     db = SessionLocal()
     try:
         ultimo = db.query(Boletin.numero).filter(Boletin.procesado.is_(True)).order_by(Boletin.numero.desc()).first()
-        ultimo_n = ultimo[0] if ultimo else 348
+        if ultimo:
+            ultimo_n = ultimo[0]
+        else:
+            # Primera ejecución: descubrir el último boletín real desde el índice DNPI
+            ultimo_n = scrape_index_for_number(date.today().year)
+            if ultimo_n is None:
+                log.error("No se pudo determinar el último boletín desde el índice DNPI")
+                return
+            log.info(f"Primer arranque: último boletín detectado = {ultimo_n}, se procesará ese.")
+            ultimo_n -= 1  # run_ingestion intentará ultimo_n + 1
         run_ingestion(db, ultimo_n)
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Error en ingesta manual: {e}")
+        log.error(f"Error en ingesta manual: {e}")
     finally:
         db.close()
 
