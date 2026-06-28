@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(100), nullable=False),
         sa.Column(
             "tier",
-            sa.Enum("starter", "pro", "estudio", name="subscriptiontier"),
+            sa.Enum("starter", "pro", "estudio", name="subscriptiontier", create_type=False),
             nullable=False,
             server_default="starter",
         ),
@@ -93,7 +93,7 @@ def upgrade() -> None:
         sa.Column("denominacion", sa.String(500), nullable=False),
         sa.Column(
             "tipo",
-            sa.Enum("denominativa", "figurativa", "mixta", name="tipomarca"),
+            sa.Enum("denominativa", "figurativa", "mixta", name="tipomarca", create_type=False),
             nullable=False,
             server_default="denominativa",
         ),
@@ -101,7 +101,7 @@ def upgrade() -> None:
         sa.Column("logo_path", sa.String(500), nullable=True),
         sa.Column(
             "sensibilidad",
-            sa.Enum("bajo", "medio", "alto", name="sensibilidadumbral"),
+            sa.Enum("bajo", "medio", "alto", name="sensibilidadumbral", create_type=False),
             nullable=False,
             server_default="medio",
         ),
@@ -180,7 +180,7 @@ def upgrade() -> None:
         sa.Column("dias_habiles_restantes", sa.Integer(), nullable=True),
         sa.Column(
             "estado",
-            sa.Enum("nueva", "revisada", "en_oposicion", "descartada", name="estadoalerta"),
+            sa.Enum("nueva", "revisada", "en_oposicion", "descartada", name="estadoalerta", create_type=False),
             nullable=False,
             server_default="nueva",
         ),
