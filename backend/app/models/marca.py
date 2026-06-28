@@ -31,7 +31,9 @@ class MarcaVigilada(Base):
     tipo = Column(SAEnum(TipoMarca), nullable=False, default=TipoMarca.denominativa)
     # clases Niza como array de enteros (ej. [30, 35])
     clases_niza = Column(ARRAY(Integer), nullable=False, default=list)
-    logo_path = Column(String(500), nullable=True)  # ruta al archivo de imagen subido
+    logo_path = Column(String(500), nullable=True)
+    logo_data = Column(LargeBinary, nullable=True)
+    logo_mime = Column(String(50), nullable=True)
     sensibilidad = Column(SAEnum(SensibilidadUmbral), nullable=False, default=SensibilidadUmbral.medio)
     cliente_nombre = Column(String(500), nullable=True)  # cliente final del agente
     notas = Column(Text, nullable=True)

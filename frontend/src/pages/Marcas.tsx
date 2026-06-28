@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { marcasApi, type Marca, type Sensibilidad, type TipoMarca } from '../lib/api'
 import Spinner from '../components/Spinner'
+import AuthImage from '../components/AuthImage'
 
 const CLASES_NIZA = Array.from({ length: 45 }, (_, i) => i + 1)
 
@@ -40,6 +41,9 @@ export default function Marcas() {
   const [editing, setEditing] = useState<Marca | null>(null)
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [error, setError] = useState('')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
 
   const { data: marcas = [], isLoading } = useQuery({
@@ -48,13 +52,21 @@ export default function Marcas() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: FormData) => marcasApi.create(data),
+    mutationFn: async (data: FormData) => {
+      const res = await marcasApi.create(data)
+      if (logoFile) await marcasApi.uploadLogo(res.data.id, logoFile).catch(() => {})
+      return res
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['marcas'] }); closeForm() },
     onError: (e: any) => setError(e.response?.data?.detail ?? 'Error al guardar'),
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: FormData }) => marcasApi.update(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
+      const res = await marcasApi.update(id, data)
+      if (logoFile) await marcasApi.uploadLogo(id, logoFile).catch(() => {})
+      return res
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['marcas'] }); closeForm() },
     onError: (e: any) => setError(e.response?.data?.detail ?? 'Error al guardar'),
   })
@@ -68,6 +80,8 @@ export default function Marcas() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setError('')
+    setLogoFile(null)
+    setLogoPreview(null)
     setShowForm(true)
   }
 
@@ -82,12 +96,25 @@ export default function Marcas() {
       notas:          m.notas ?? '',
     })
     setError('')
+    setLogoFile(null)
+    setLogoPreview(null)  // existing logo shown via AuthImage below
     setShowForm(true)
   }
 
   function closeForm() {
     setShowForm(false)
     setEditing(null)
+    setLogoFile(null)
+    setLogoPreview(null)
+  }
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setLogoPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
   function toggleClase(c: number) {
@@ -142,14 +169,23 @@ export default function Marcas() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {activas.map((m) => (
             <div key={m.id} className="card p-4 flex flex-col gap-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-gray-900">{m.denominacion}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900 truncate">{m.denominacion}</p>
                   {m.cliente_nombre && (
-                    <p className="text-xs text-gray-500 mt-0.5">{m.cliente_nombre}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{m.cliente_nombre}</p>
                   )}
                 </div>
-                <span className="badge bg-gray-100 text-gray-600 text-xs">{TIPO_LABELS[m.tipo].split(' ')[0]}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {m.has_logo && (
+                    <AuthImage
+                      url={marcasApi.logoPath(m.id)}
+                      alt="logo"
+                      className="h-10 w-10 rounded object-contain border border-gray-200 bg-white"
+                    />
+                  )}
+                  <span className="badge bg-gray-100 text-gray-600 text-xs">{TIPO_LABELS[m.tipo].split(' ')[0]}</span>
+                </div>
               </div>
               <div className="flex flex-wrap gap-1">
                 {m.clases_niza.map((c) => (
@@ -224,6 +260,54 @@ export default function Marcas() {
                   </select>
                 </div>
               </div>
+              {(form.tipo === 'figurativa' || form.tipo === 'mixta') && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Logo de la marca <span className="text-gray-400">(PNG/JPG, máx 2 MB)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {logoPreview ? (
+                      <img
+                        src={logoPreview}
+                        alt="preview"
+                        className="h-14 w-14 rounded object-contain border border-gray-200 bg-white"
+                      />
+                    ) : editing?.has_logo && !logoFile ? (
+                      <AuthImage
+                        url={marcasApi.logoPath(editing.id)}
+                        alt="logo actual"
+                        className="h-14 w-14 rounded object-contain border border-gray-200 bg-white"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn-secondary text-sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {(logoPreview || editing?.has_logo) ? 'Cambiar logo' : 'Subir logo'}
+                    </button>
+                    {logoPreview && (
+                      <button
+                        type="button"
+                        className="text-xs text-red-500 hover:text-red-700"
+                        onClick={() => { setLogoFile(null); setLogoPreview(null) }}
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Habilitará comparación visual con logos del boletín (Capa C — Claude Vision)
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Clases de Niza * <span className="text-gray-400">({form.clases_niza.length} seleccionadas)</span>

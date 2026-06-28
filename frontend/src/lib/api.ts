@@ -49,14 +49,23 @@ export interface Marca {
   cliente_nombre: string | null
   notas: string | null
   activa: number
+  has_logo: boolean
 }
 
 export const marcasApi = {
   list: () => api.get<Marca[]>('/marcas/'),
-  create: (data: Omit<Marca, 'id' | 'activa'>) => api.post<Marca>('/marcas/', data),
-  update: (id: string, data: Partial<Omit<Marca, 'id' | 'activa'>>) =>
+  create: (data: Omit<Marca, 'id' | 'activa' | 'has_logo'>) => api.post<Marca>('/marcas/', data),
+  update: (id: string, data: Partial<Omit<Marca, 'id' | 'activa' | 'has_logo'>>) =>
     api.put<Marca>(`/marcas/${id}`, data),
   remove: (id: string) => api.delete(`/marcas/${id}`),
+  uploadLogo: (id: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post(`/marcas/${id}/logo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  logoPath: (id: string) => `/marcas/${id}/logo`,
 }
 
 // ── Alertas ───────────────────────────────────────────────────────────────────
