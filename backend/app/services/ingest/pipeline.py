@@ -224,6 +224,20 @@ def _check_collision(
     if score_total < marca.score_threshold:
         return None
 
+    # Capa C: comparación visual si ambas partes tienen logo
+    score_figurativo = None
+    if marca.logo_data and sol.logo_data:
+        try:
+            from app.services.ai.vision import compare_logos
+            vision_result = compare_logos(
+                marca.logo_data,
+                sol.logo_data,
+                mime=sol.logo_mime or "image/png",
+            )
+            score_figurativo = vision_result.get("score")
+        except Exception as e:
+            logger.warning(f"Capa C falló para {marca.denominacion} vs {sol.denominacion}: {e}")
+
     # Calcular deadline de oposición
     from app.config import get_settings
     settings = get_settings()
@@ -239,6 +253,7 @@ def _check_collision(
         score_denominativo=score_denom,
         score_clase=score_clase,
         score_total=score_total,
+        score_figurativo=score_figurativo,
         detalle_fonetico=denom_result,
         fecha_limite_oposicion=fecha_limite,
         dias_habiles_restantes=dias_restantes,

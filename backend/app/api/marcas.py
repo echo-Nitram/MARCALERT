@@ -5,6 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -41,6 +42,7 @@ class MarcaOut(BaseModel):
     cliente_nombre: Optional[str]
     notas: Optional[str]
     activa: int
+    has_logo: bool
 
     class Config:
         from_attributes = True
@@ -104,6 +106,43 @@ def update_marca(
     return _to_out(marca)
 
 
+_ALLOWED_MIME = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+_MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
+
+
+@router.post("/{marca_id}/logo", status_code=200)
+async def upload_logo(
+    marca_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    tenant: Tenant = Depends(get_current_active_tenant),
+):
+    marca = _get_or_404(db, marca_id, tenant.id)
+    if file.content_type not in _ALLOWED_MIME:
+        raise HTTPException(status_code=415, detail="Formato no soportado. Usá PNG, JPG o WebP.")
+    data = await file.read()
+    if len(data) > _MAX_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail="Logo demasiado grande (máx 2 MB)")
+    marca.logo_data = data
+    marca.logo_mime = file.content_type
+    db.commit()
+    return {"detail": "Logo guardado"}
+
+
+@router.get("/{marca_id}/logo")
+def get_logo(
+    marca_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    tenant: Tenant = Depends(get_current_active_tenant),
+):
+    marca = _get_or_404(db, marca_id, tenant.id)
+    if not marca.logo_data:
+        raise HTTPException(status_code=404, detail="Esta marca no tiene logo")
+    return Response(content=marca.logo_data, media_type=marca.logo_mime or "image/png")
+
+
 @router.delete("/{marca_id}", status_code=204)
 def delete_marca(
     marca_id: UUID,
@@ -135,4 +174,5 @@ def _to_out(m: MarcaVigilada) -> MarcaOut:
         cliente_nombre=m.cliente_nombre,
         notas=m.notas,
         activa=m.activa,
+        has_logo=bool(m.logo_data),
     )
